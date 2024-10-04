@@ -1,0 +1,63 @@
+# Configuração para o perfil 'k8s'
+spring:
+  config:
+    activate:
+      on-profile: k8s
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_DATABASE:db_java}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:123123}
+
+---
+# Configuração para o perfil 'dev'
+spring:
+  config:
+    activate:
+      on-profile: dev  # Ativa esta configuração para o perfil 'dev'
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://172.18.0.1:5432/db_java
+    username: admin
+    password: 123123
+  jpa:
+    hibernate:
+      ddl-auto: update  # Atualiza automaticamente para desenvolvimento
+    show-sql: true
+
+---
+# Configuração para o perfil 'test'
+spring:
+  config:
+    activate:
+      on-profile: test  # Define que esta configuração é para o perfil 'test'
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:test_db  # Banco de dados em memória
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Cria e remove o banco de dados ao iniciar/parar
+
+
+---
+# Configuração para o perfil 'prod'
+spring:
+  config:
+    activate:
+      on-profile: prod  # Define que esta configuração é para o perfil 'prod'
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}  # Use variáveis de ambiente
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: none  # Evitar mudanças automáticas no banco de dados
+
+
+---
+server:
+  error:
+    include-stacktrace: never

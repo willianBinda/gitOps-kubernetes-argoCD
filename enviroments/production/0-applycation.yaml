@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-prod
+  namespace: app
+spec:
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: https://github.com/willianBinda/gitOps-kubernetes-argoCD.git
+    targetRevision: main
+    path: enviroments/production
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

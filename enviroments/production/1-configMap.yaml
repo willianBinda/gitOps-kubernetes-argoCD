@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: microsservices-config
+data:
+  postgres_port: "5432"
+  postgres_dbname: hro_pop_db

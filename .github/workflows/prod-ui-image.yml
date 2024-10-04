@@ -1,0 +1,118 @@
+name: (Prod) Update version ui
+
+on:
+  pull_request:
+    types:
+      - opened
+    branches:
+      - main
+    paths:
+      - "microsservices/ui-interface/**"
+env:
+  UI_VERSION: ""
+  SHOULD_BUILD: "false"
+
+jobs:
+  build:
+    if: github.base_ref == 'main' && github.head_ref == 'stage'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install yq
+        run: |
+          curl -sLo /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.17.2/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Extract image version
+        run: |
+          # Extract the image version from the YAML file
+          version=$(yq e '.spec.template.spec.containers[] | select(.name == "ui-interface") | .image | split(":") | .[1]' enviroments/production/4-ui-interface.yaml)
+          echo "UI_VERSION=$version" >> $GITHUB_ENV
+
+      - name: Log Old Version POP
+        run: |
+          echo "Old version ui extracted: ${{ env.UI_VERSION }}"
+
+      - name: Set New Image Version
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: commits } = await github.rest.pulls.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            let envValue = process.env.UI_VERSION;
+
+            let [major, minor, patch] = envValue.split('.').map(Number);
+
+            let shouldIncrementMinor = false;
+            let shouldIncrementPatch = false;
+            let updated = false;
+
+            const directoriesOfInterest = [
+              'microsservices/ui-interface/'
+            ];
+
+            for (const commit of commits) {
+              const { data: commitDetails } = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: commit.sha,
+              });
+
+              const isInDirectoryOfInterest = commitDetails.files.some(file => 
+                directoriesOfInterest.some(dir => file.filename.startsWith(dir))
+              );
+
+              const message = commit.commit.message;
+
+              const featRegex = /(?:\[.*?\]\s*)?feat:/;
+              const fixRegex = /(?:\[.*?\]\s*)?fix:/;
+              const perfRegex = /(?:\[.*?\]\s*)?perf:/;
+
+              if ((featRegex.test(message) || perfRegex.test(message)) && isInDirectoryOfInterest) {
+                shouldIncrementMinor = true;
+                break;
+              } else if (fixRegex.test(message) && isInDirectoryOfInterest) {
+                shouldIncrementPatch = true;
+              }
+            }
+
+            if (shouldIncrementMinor) {
+              minor += 1;
+              patch = 0;
+              updated = true;
+            } else if (shouldIncrementPatch) {
+              patch += 1;
+              updated = true;
+            }
+
+            if (updated) {
+              const newVersion = `${major}.${minor}.${patch}`;
+              core.exportVariable('UI_VERSION', newVersion);
+              core.exportVariable('SHOULD_BUILD', 'true');
+            } else {
+              core.exportVariable('SHOULD_BUILD', 'false');
+            }
+
+      - name: Docker Login
+        if: env.SHOULD_BUILD == 'true'
+        uses: docker/login-action@v3.3.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Build and push Docker image
+        if: env.SHOULD_BUILD == 'true'
+        uses: docker/build-push-action@v6.7.0
+        with:
+          context: microsservices/ui-interface
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/prod-ui:${{ env.UI_VERSION }}
+            ${{ secrets.DOCKER_USERNAME }}/prod-ui:latest
